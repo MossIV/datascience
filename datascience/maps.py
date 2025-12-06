@@ -201,6 +201,14 @@ class Map(_FoliumWrapper, collections.abc.Mapping):
         # Enforce zoom consistency
         attrs['max_zoom'] = max(attrs['zoom_start']+2, attrs['max_zoom'])
         attrs['min_zoom'] = min(attrs['zoom_start']-2, attrs['min_zoom'])
+
+        # Some folium versions raise ValueError when a custom tile string is
+        # provided without an attribution (`attr`). Provide a minimal
+        # non-empty attribution when `tiles` is a string and no `attr` was set
+        # to avoid TileLayer errors while preserving explicit `attr` values.
+        if isinstance(attrs.get('tiles'), str) and not attrs.get('attr'):
+            attrs['attr'] = attrs['tiles']
+
         return self._mapper(**attrs)
 
     def _autozoom(self):
@@ -399,13 +407,19 @@ class Map(_FoliumWrapper, collections.abc.Mapping):
                 pass
             try:
                 path = path_or_json_or_string_or_url
-                if path.endswith('.gz') or path.endswith('.gzip'):
+                # If it's a URL, fetch it with urllib instead of open()
+                if isinstance(path, str) and (path.startswith('http://') or path.startswith('https://')):
+                    import urllib.request
+                    with urllib.request.urlopen(path) as url:
+                        contents = url.read().decode()
+                elif path.endswith('.gz') or path.endswith('.gzip'):
                     import gzip
                     contents = gzip.open(path, 'r').read().decode('utf-8')
                 else:
                     contents = open(path, 'r').read()
                 data = json.loads(contents)
-            except FileNotFoundError:
+            except (FileNotFoundError, OSError):
+                # Fall through to the URL handling below if the path isn't a local file
                 pass
         if not data:
             import urllib.request
@@ -541,7 +555,26 @@ class Marker(_MapFeature):
             icon_args['icon_shape'] = 'marker'
             if 'icon' not in icon_args:
                 icon_args['icon'] = 'circle'
-            attrs['icon'] = BeautifyIcon(**icon_args)
+            # BeautifyIcon stores option keys in snake_case (e.g. 'text_color').
+            # Some tests and external code expect camelCase keys (e.g. 'textColor').
+            # Duplicate a few common keys into camelCase on the options dict so
+            # both styles are available.
+            icon = BeautifyIcon(**icon_args)
+            try:
+                opts = getattr(icon, 'options', {})
+                if isinstance(opts, dict):
+                    if 'text_color' in opts and 'textColor' not in opts:
+                        opts['textColor'] = opts['text_color']
+                    if 'background_color' in opts and 'backgroundColor' not in opts:
+                        opts['backgroundColor'] = opts['background_color']
+                    if 'border_color' in opts and 'borderColor' not in opts:
+                        opts['borderColor'] = opts['border_color']
+                    if 'icon_shape' in opts and 'iconShape' not in opts:
+                        opts['iconShape'] = opts.get('icon_shape')
+            except Exception:
+                # Be conservative: if anything goes wrong, leave the icon as-is.
+                pass
+            attrs['icon'] = icon
         else:
             attrs['icon'] = folium.Icon(**icon_args)
         return attrs
