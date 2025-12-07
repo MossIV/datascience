@@ -2009,4 +2009,4 @@ def test_as_label(table):
     
     with pytest.raises(ValueError) as t:
         table._as_label(invalid_input)
-    assert str(t.value == "ValueError: None is not a label or index")
+    assert str(t.value) == "None is not a label or index"
