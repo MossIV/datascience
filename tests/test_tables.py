@@ -1997,7 +1997,7 @@ def test_num_columns(table):
     assert number == 3
 
 def test_with_columns(table):
-    """Test that with_columns returns self if not labels_and_values given 2569"""
+    """Test that with_columns returns self if no labels_and_values passed"""
     t = table.with_columns()
 
     assert table is t
