@@ -2001,3 +2001,12 @@ def test_with_columns(table):
     t = table.with_columns()
 
     assert table is t
+    
+def test_as_label(table):
+    """Test that as_label raises ValueError for invalid index_or_label along with correct message"""
+    
+    invalid_input = None
+    
+    with pytest.raises(ValueError) as t:
+        table._as_label(invalid_input)
+    assert str(t.value == "ValueError: None is not a label or index")
